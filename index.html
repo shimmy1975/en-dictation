@@ -1,485 +1,604 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>英会話ディクテくん</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dication App「英会話ディクテくん」</title>
 
-<style>
-  :root {
-    --bg: #000;
-    --text: #ffff66;
-    --muted: #aaaaaa;
-    --panel: #111;
-    --panel2: #222;
-    --accent: #00ffb3;
-    --danger: #ff5a5a;
-    --latest-bg: rgba(255, 255, 0, 0.12);
-    --latest-border: rgba(255, 255, 0, 0.3);
-  }
+  <style>
+    :root {
+      --bg: #000000;
+      --panel: #0f0f0f;
+      --panel2: #1d1d1d;
+      --border: #2a2a2a;
+      --text-main: #ffff66;
+      --text-sub: #a8f0d2;
+      --text-muted: #aaaaaa;
+      --text-white: #ffffff;
+      --accent: #00ffb3;
+      --danger: #ff6b6b;
+      --latest-bg: rgba(255, 255, 0, 0.12);
+      --latest-border: rgba(255, 255, 0, 0.28);
+      --translation-bg: rgba(0, 255, 179, 0.08);
+    }
 
-  * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-  html, body {
-    margin: 0;
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-  body {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+    body {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
 
-  #topbar {
-    padding: 12px;
-    border-bottom: 1px solid #222;
-    background: #050505;
-  }
+    #topbar {
+      padding: 12px;
+      background: #050505;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      z-index: 10;
+    }
 
-  #title {
-    font-size: 20px;
-    font-weight: 800;
-    margin-bottom: 10px;
-  }
+    #title {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 10px;
+      letter-spacing: 0.02em;
+    }
 
-  #controls {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 8px;
-  }
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
 
-  .btn {
-    appearance: none;
-    border: 1px solid #444;
-    background: #222;
-    color: #fff;
-    padding: 10px 14px;
-    border-radius: 10px;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-  }
+    .btn {
+      appearance: none;
+      border: 1px solid #444;
+      background: #222;
+      color: var(--text-white);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
 
-  .btn:active {
-    transform: scale(0.98);
-  }
+    .btn:active {
+      transform: scale(0.98);
+    }
 
-  .btn.primary {
-    background: #2c2c2c;
-  }
+    .btn.primary {
+      background: #2b2b2b;
+    }
 
-  .btn.on {
-    background: #1f3425;
-    border-color: #3d8553;
-    color: #dbffe5;
-  }
+    .btn.on {
+      background: #1d3424;
+      border-color: #3f7f52;
+      color: #ddffe7;
+    }
 
-  #status {
-    font-size: 14px;
-    color: var(--muted);
-    line-height: 1.4;
-  }
+    #status {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
 
-  #container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 14px 14px 120px 14px;
-  }
+    #container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 14px 120px 14px;
+      scroll-behavior: smooth;
+    }
 
-  #result {
-    font-size: 24px;
-    line-height: 1.65;
-    font-weight: 700;
-    user-select: text;
-    -webkit-user-select: text;
-  }
+    #result {
+      font-size: 24px; /* 大きすぎない実用サイズ */
+      line-height: 1.65;
+      font-weight: 700;
+      user-select: text;
+      -webkit-user-select: text;
+    }
 
-  .line {
-    display: block;
-    margin-bottom: 10px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    border: 1px solid transparent;
-    word-break: break-word;
-  }
+    .line-block {
+      margin: 0 0 12px 0;
+      border-radius: 12px;
+      padding: 8px 10px;
+      border: 1px solid transparent;
+    }
 
-  .line.latest {
-    background: var(--latest-bg);
-    border-color: var(--latest-border);
-  }
+    .line-block.latest {
+      background: var(--latest-bg);
+      border-color: var(--latest-border);
+    }
 
-  .line.interim {
-    opacity: 0.95;
-  }
+    .line-block.interim {
+      opacity: 0.95;
+    }
 
-  .word {
-    cursor: pointer;
-  }
+    .line-en {
+      color: var(--text-main);
+      word-break: break-word;
+    }
 
-  .word.active {
-    background: rgba(0,255,179,0.18);
-    border-radius: 6px;
-    padding: 0 2px;
-  }
+    .line-ja {
+      margin-top: 6px;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--text-sub);
+      font-weight: 600;
+      background: var(--translation-bg);
+      border-radius: 8px;
+      padding: 6px 8px;
+      word-break: break-word;
+    }
 
-  #translation {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--panel);
-    border-top: 1px solid #2a2a2a;
-    padding: 10px 12px 12px 12px;
-  }
+    .line-ja.pending {
+      color: #7fd7bc;
+      opacity: 0.8;
+    }
 
-  #translationHeader {
-    font-size: 13px;
-    color: #8aeecf;
-    margin-bottom: 6px;
-    font-weight: 700;
-  }
+    .word {
+      cursor: pointer;
+    }
 
-  #translationBody {
-    font-size: 18px;
-    color: var(--accent);
-    line-height: 1.5;
-    white-space: pre-wrap;
-    min-height: 48px;
-  }
+    .word.active {
+      background: rgba(0, 255, 179, 0.18);
+      border-radius: 6px;
+      padding: 0 2px;
+    }
 
-  .hint {
-    margin-top: 4px;
-    font-size: 12px;
-    color: #888;
-  }
-</style>
+    #translationPanel {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 20;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      padding: 10px 12px 12px 12px;
+    }
+
+    #translationHeader {
+      font-size: 13px;
+      color: #8aeecf;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    #translationBody {
+      min-height: 48px;
+      white-space: pre-wrap;
+      font-size: 18px;
+      line-height: 1.5;
+      color: var(--accent);
+    }
+
+    .hint {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #8a8a8a;
+      line-height: 1.4;
+    }
+  </style>
 </head>
 <body>
-
   <div id="topbar">
     <div id="title">Dication App「英会話ディクテくん」</div>
 
     <div id="controls">
       <button id="recordBtn" class="btn primary">録音開始</button>
       <button id="subtitleBtn" class="btn on">字幕モード ON</button>
+      <button id="autoTranslateBtn" class="btn on">自動翻訳 ON</button>
       <button id="clearBtn" class="btn">クリア</button>
     </div>
 
-    <div id="status">停止中 / 単語タップで翻訳 / 長押し選択で文ごと翻訳</div>
+    <div id="status">
+      停止中 / 単語タップで単語翻訳 / 長押しで範囲翻訳 / 字幕モード時は二段表示
+    </div>
   </div>
 
   <div id="container">
     <div id="result">
-      <div class="line latest">ここに文字が出ます。</div>
+      <div class="line-block latest">
+        <div class="line-en">ここに文字が出ます。</div>
+      </div>
     </div>
   </div>
 
-  <div id="translation">
-    <div id="translationHeader">翻訳</div>
-    <div id="translationBody">ここに翻訳が表示されます。</div>
-    <div class="hint">単語タップで単語訳。長押しで選択した場合は選択範囲を翻訳。</div>
+  <div id="translationPanel">
+    <div id="translationHeader">手動翻訳</div>
+    <div id="translationBody">ここに単語・選択範囲の翻訳が表示されます。</div>
+    <div class="hint">
+      ・字幕モード ON：英語字幕の下に小さく日本語訳を表示<br>
+      ・自動翻訳 ON：確定した行ごとに自動で訳を付ける
+    </div>
   </div>
 
-<script>
-(function () {
-  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  <script>
+    (function () {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  var recordBtn = document.getElementById("recordBtn");
-  var subtitleBtn = document.getElementById("subtitleBtn");
-  var clearBtn = document.getElementById("clearBtn");
-  var statusDiv = document.getElementById("status");
-  var container = document.getElementById("container");
-  var resultDiv = document.getElementById("result");
-  var translationBody = document.getElementById("translationBody");
+      const recordBtn = document.getElementById("recordBtn");
+      const subtitleBtn = document.getElementById("subtitleBtn");
+      const autoTranslateBtn = document.getElementById("autoTranslateBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const statusDiv = document.getElementById("status");
+      const container = document.getElementById("container");
+      const resultDiv = document.getElementById("result");
+      const translationBody = document.getElementById("translationBody");
 
-  var state = {
-    isListening: false,
-    subtitleMode: true,
-    finalLines: [],
-    interimText: "",
-    userInteracting: false,
-    interactionTimer: null,
-    selectionTimer: null,
-    restartTimer: null,
-    activeWordEl: null
-  };
+      const state = {
+        isListening: false,
+        subtitleMode: true,
+        autoTranslate: true,
+        lines: [],   // { id, text, translation, translating }
+        interimText: "",
+        userInteracting: false,
+        interactionTimer: null,
+        selectionTimer: null,
+        restartTimer: null,
+        activeWordEl: null,
+        nextId: 1
+      };
 
-  if (!SpeechRecognition) {
-    statusDiv.textContent = "このブラウザは音声認識に対応していません（Chrome / Edge / Safari 推奨）";
-    recordBtn.disabled = true;
-    subtitleBtn.disabled = true;
-    clearBtn.disabled = true;
-    return;
-  }
-
-  var recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.interimResults = true;
-  recognition.continuous = false;
-
-  function setStatus(text, color) {
-    statusDiv.textContent = text;
-    statusDiv.style.color = color || "#aaaaaa";
-  }
-
-  function markInteracting() {
-    state.userInteracting = true;
-    clearTimeout(state.interactionTimer);
-    state.interactionTimer = setTimeout(function () {
-      state.userInteracting = false;
-    }, 1800);
-  }
-
-  function hasSelection() {
-    var sel = window.getSelection();
-    return sel && sel.toString && sel.toString().trim().length > 0;
-  }
-
-  function isNearBottom() {
-    return (container.scrollHeight - container.scrollTop - container.clientHeight) < 80;
-  }
-
-  function autoScrollIfNeeded() {
-    if (state.userInteracting) return;
-    if (hasSelection()) return;
-    if (!isNearBottom()) return;
-    container.scrollTop = container.scrollHeight;
-  }
-
-  function escapeHtml(text) {
-    return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function tokenize(text) {
-    // 単語・空白・その他を分ける
-    return text.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*|\s+|[^A-Za-z\s]+/g) || [];
-  }
-
-  function buildLineHtml(text, latest, interim) {
-    var tokens = tokenize(text);
-    var html = '<div class="line' +
-      (latest ? ' latest' : '') +
-      (interim ? ' interim' : '') +
-      '">';
-
-    for (var i = 0; i < tokens.length; i++) {
-      var t = tokens[i];
-
-      if (/^\s+$/.test(t)) {
-        html += t.replace(/ /g, "&nbsp;");
-      } else if (/^[A-Za-z]+(?:['’-][A-Za-z]+)*$/.test(t)) {
-        var safe = escapeHtml(t);
-        html += '<span class="word" data-word="' + safe + '">' + safe + '</span>';
-      } else {
-        html += '<span>' + escapeHtml(t) + '</span>';
+      if (!SpeechRecognition) {
+        statusDiv.textContent = "このブラウザは音声認識に対応していません（Chrome / Edge / Safari 推奨）";
+        recordBtn.disabled = true;
+        subtitleBtn.disabled = true;
+        autoTranslateBtn.disabled = true;
+        clearBtn.disabled = true;
+        return;
       }
-    }
 
-    html += '</div>';
-    return html;
-  }
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = false;
 
-  function render() {
-    var html = "";
+      function setStatus(text, color = "#aaaaaa") {
+        statusDiv.textContent = text;
+        statusDiv.style.color = color;
+      }
 
-    if (state.subtitleMode) {
-      if (state.finalLines.length === 0 && !state.interimText) {
-        html = '<div class="line latest">ここに文字が出ます。</div>';
-      } else {
-        for (var i = 0; i < state.finalLines.length; i++) {
-          var latestFinal = (i === state.finalLines.length - 1 && !state.interimText);
-          html += buildLineHtml(state.finalLines[i], latestFinal, false);
+      function markInteracting() {
+        state.userInteracting = true;
+        clearTimeout(state.interactionTimer);
+        state.interactionTimer = setTimeout(() => {
+          state.userInteracting = false;
+        }, 1800);
+      }
+
+      function hasSelection() {
+        const sel = window.getSelection();
+        return !!(sel && sel.toString().trim().length > 0);
+      }
+
+      function isNearBottom(threshold = 100) {
+        return (container.scrollHeight - container.scrollTop - container.clientHeight) < threshold;
+      }
+
+      function maybeAutoScroll() {
+        if (state.userInteracting) return;
+        if (hasSelection()) return;
+        if (!isNearBottom(140)) return;
+        container.scrollTop = container.scrollHeight;
+      }
+
+      function escapeHtml(text) {
+        return text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function tokenize(text) {
+        return text.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*|\s+|[^A-Za-z\s]+/g) || [];
+      }
+
+      function buildWordHtml(text) {
+        const tokens = tokenize(text);
+        let html = "";
+
+        for (const token of tokens) {
+          if (/^\s+$/.test(token)) {
+            html += token.replace(/ /g, "&nbsp;");
+          } else if (/^[A-Za-z]+(?:['’-][A-Za-z]+)*$/.test(token)) {
+            const safe = escapeHtml(token);
+            html += `<span class="word" data-word="${safe}">${safe}</span>`;
+          } else {
+            html += `<span>${escapeHtml(token)}</span>`;
+          }
         }
-        if (state.interimText) {
-          html += buildLineHtml(state.interimText, true, true);
+
+        return html;
+      }
+
+      function render() {
+        let html = "";
+
+        if (state.subtitleMode) {
+          if (state.lines.length === 0 && !state.interimText) {
+            html = `
+              <div class="line-block latest">
+                <div class="line-en">ここに文字が出ます。</div>
+              </div>
+            `;
+          } else {
+            state.lines.forEach((line, index) => {
+              const isLatestFinal = index === state.lines.length - 1 && !state.interimText;
+              let jaHtml = "";
+
+              if (state.autoTranslate) {
+                if (line.translation) {
+                  jaHtml = `<div class="line-ja">${escapeHtml(line.translation)}</div>`;
+                } else if (line.translating) {
+                  jaHtml = `<div class="line-ja pending">翻訳中…</div>`;
+                }
+              }
+
+              html += `
+                <div class="line-block ${isLatestFinal ? "latest" : ""}">
+                  <div class="line-en">${buildWordHtml(line.text)}</div>
+                  ${jaHtml}
+                </div>
+              `;
+            });
+
+            if (state.interimText) {
+              html += `
+                <div class="line-block latest interim">
+                  <div class="line-en">${buildWordHtml(state.interimText)}</div>
+                </div>
+              `;
+            }
+          }
+        } else {
+          const mergedFinal = state.lines.map(line => line.text).join(" ");
+          const merged = (mergedFinal + (state.interimText ? (mergedFinal ? " " : "") + state.interimText : "")).trim() || "ここに文字が出ます。";
+
+          html = `
+            <div class="line-block latest ${state.interimText ? "interim" : ""}">
+              <div class="line-en">${buildWordHtml(merged)}</div>
+            </div>
+          `;
+        }
+
+        resultDiv.innerHTML = html;
+        maybeAutoScroll();
+      }
+
+      function clearActiveWord() {
+        if (state.activeWordEl) {
+          state.activeWordEl.classList.remove("active");
+          state.activeWordEl = null;
         }
       }
-    } else {
-      var merged = state.finalLines.join(" ");
-      if (state.interimText) {
-        merged += (merged ? " " : "") + state.interimText;
-      }
-      html = buildLineHtml(merged || "ここに文字が出ます。", true, !!state.interimText);
-    }
 
-    resultDiv.innerHTML = html;
-    autoScrollIfNeeded();
-  }
+      async function fetchTranslation(text) {
+        const url = "https://api.mymemory.translated.net/get?q=" +
+          encodeURIComponent(text) +
+          "&langpair=en|ja";
 
-  function clearActiveWord() {
-    if (state.activeWordEl) {
-      state.activeWordEl.classList.remove("active");
-      state.activeWordEl = null;
-    }
-  }
+        const res = await fetch(url);
+        const data = await res.json();
 
-  async function translateText(text) {
-    if (!text || !text.trim()) return;
-
-    translationBody.textContent = "翻訳中…";
-
-    try {
-      var url = "https://api.mymemory.translated.net/get?q=" +
-        encodeURIComponent(text) + "&langpair=en|ja";
-
-      var res = await fetch(url);
-      var data = await res.json();
-
-      var translated = "翻訳結果を取得できませんでした。";
-      if (data && data.responseData && data.responseData.translatedText) {
-        translated = data.responseData.translatedText;
+        if (data && data.responseData && data.responseData.translatedText) {
+          return data.responseData.translatedText;
+        }
+        return "翻訳結果を取得できませんでした。";
       }
 
-      translationBody.textContent = "▶ " + text + "\n→ " + translated;
-    } catch (e) {
-      translationBody.textContent = "翻訳エラー：ネットワークまたはAPI応答を確認してください。";
-      console.error(e);
-    }
-  }
+      async function translateManual(text) {
+        if (!text || !text.trim()) return;
+        translationBody.textContent = "翻訳中…";
 
-  // 録音ボタン
-  recordBtn.addEventListener("click", function () {
-    if (!state.isListening) {
-      try {
-        recognition.start();
-      } catch (e) {
-        console.log("start error", e);
-      }
-    } else {
-      state.isListening = false;
-      clearTimeout(state.restartTimer);
-      try {
-        recognition.stop();
-      } catch (e) {
-        console.log("stop error", e);
-      }
-    }
-  });
-
-  // 字幕モード切替
-  subtitleBtn.addEventListener("click", function () {
-    state.subtitleMode = !state.subtitleMode;
-    subtitleBtn.textContent = state.subtitleMode ? "字幕モード ON" : "字幕モード OFF";
-    if (state.subtitleMode) subtitleBtn.classList.add("on");
-    else subtitleBtn.classList.remove("on");
-    render();
-  });
-
-  // クリア
-  clearBtn.addEventListener("click", function () {
-    state.finalLines = [];
-    state.interimText = "";
-    clearActiveWord();
-    translationBody.textContent = "ここに翻訳が表示されます。";
-    render();
-  });
-
-  // 音声認識イベント
-  recognition.onstart = function () {
-    state.isListening = true;
-    recordBtn.textContent = "録音停止";
-    setStatus("● Listening...（操作中は自動スクロール停止）", "#ff6b6b");
-  };
-
-  recognition.onresult = function (event) {
-    var interim = "";
-
-    for (var i = event.resultIndex; i < event.results.length; i++) {
-      var text = event.results[i][0].transcript;
-      if (!text) continue;
-      text = text.trim();
-      if (!text) continue;
-
-      if (event.results[i].isFinal) {
-        state.finalLines.push(text);
-      } else {
-        interim += (interim ? " " : "") + text;
-      }
-    }
-
-    state.interimText = interim;
-    render();
-  };
-
-  recognition.onerror = function (event) {
-    console.log("speech error:", event.error);
-
-    if (event.error === "not-allowed") {
-      state.isListening = false;
-      recordBtn.textContent = "録音開始";
-      setStatus("マイクが許可されていません。ブラウザのマイク許可を確認してください。", "#ff9999");
-      return;
-    }
-
-    if (event.error !== "no-speech" && event.error !== "aborted") {
-      setStatus("認識エラー: " + event.error, "#ff9999");
-    }
-  };
-
-  recognition.onend = function () {
-    if (state.isListening) {
-      clearTimeout(state.restartTimer);
-      state.restartTimer = setTimeout(function () {
         try {
-          recognition.start();
+          const translated = await fetchTranslation(text);
+          translationBody.textContent = `▶ ${text}\n→ ${translated}`;
         } catch (e) {
-          console.log("restart skipped", e);
+          translationBody.textContent = "翻訳エラー：ネットワークまたはAPI応答を確認してください。";
+          console.error(e);
         }
-      }, 250);
-    } else {
-      recordBtn.textContent = "録音開始";
-      setStatus("停止中 / 単語タップで翻訳 / 長押し選択で文ごと翻訳", "#aaaaaa");
-    }
-  };
+      }
 
-  // 自動スクロール停止用
-  ["scroll", "touchstart", "touchmove", "mousedown", "wheel"].forEach(function (evt) {
-    container.addEventListener(evt, markInteracting, { passive: true });
-  });
+      async function translateLine(lineId, text) {
+        const line = state.lines.find(l => l.id === lineId);
+        if (!line) return;
+        if (line.translation || line.translating) return;
 
-  // 単語タップ翻訳
-  resultDiv.addEventListener("click", function (e) {
-    if (hasSelection()) return;
+        line.translating = true;
+        render();
 
-    var el = e.target;
-    if (!el || !el.classList || !el.classList.contains("word")) return;
+        try {
+          const translated = await fetchTranslation(text);
+          const target = state.lines.find(l => l.id === lineId);
+          if (target) {
+            target.translation = translated;
+            target.translating = false;
+            render();
+          }
+        } catch (e) {
+          const target = state.lines.find(l => l.id === lineId);
+          if (target) {
+            target.translation = "翻訳取得エラー";
+            target.translating = false;
+            render();
+          }
+          console.error(e);
+        }
+      }
 
-    markInteracting();
-    clearActiveWord();
-    el.classList.add("active");
-    state.activeWordEl = el;
+      async function translateAllMissingLines() {
+        for (const line of state.lines) {
+          if (!line.translation && !line.translating) {
+            await translateLine(line.id, line.text);
+          }
+        }
+      }
 
-    var word = el.getAttribute("data-word") || el.textContent || "";
-    translateText(word);
-  });
+      // ボタン
+      recordBtn.addEventListener("click", () => {
+        if (!state.isListening) {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.log("start error", e);
+          }
+        } else {
+          state.isListening = false;
+          clearTimeout(state.restartTimer);
+          try {
+            recognition.stop();
+          } catch (e) {
+            console.log("stop error", e);
+          }
+        }
+      });
 
-  // 長押し選択翻訳
-  document.addEventListener("selectionchange", function () {
-    clearTimeout(state.selectionTimer);
-    state.selectionTimer = setTimeout(function () {
-      var sel = window.getSelection();
-      var selected = sel && sel.toString ? sel.toString().trim() : "";
-      if (selected) {
+      subtitleBtn.addEventListener("click", () => {
+        state.subtitleMode = !state.subtitleMode;
+        subtitleBtn.textContent = state.subtitleMode ? "字幕モード ON" : "字幕モード OFF";
+        subtitleBtn.classList.toggle("on", state.subtitleMode);
+        render();
+      });
+
+      autoTranslateBtn.addEventListener("click", async () => {
+        state.autoTranslate = !state.autoTranslate;
+        autoTranslateBtn.textContent = state.autoTranslate ? "自動翻訳 ON" : "自動翻訳 OFF";
+        autoTranslateBtn.classList.toggle("on", state.autoTranslate);
+        render();
+
+        if (state.autoTranslate) {
+          await translateAllMissingLines();
+        }
+      });
+
+      clearBtn.addEventListener("click", () => {
+        state.lines = [];
+        state.interimText = "";
+        clearActiveWord();
+        translationBody.textContent = "ここに単語・選択範囲の翻訳が表示されます。";
+        render();
+      });
+
+      // 音声認識イベント
+      recognition.onstart = () => {
+        state.isListening = true;
+        recordBtn.textContent = "録音停止";
+        setStatus("● Listening...（操作中は自動スクロール停止）", "#ff6b6b");
+      };
+
+      recognition.onresult = async (event) => {
+        let interim = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          let text = event.results[i][0].transcript;
+          if (!text) continue;
+          text = text.trim();
+          if (!text) continue;
+
+          if (event.results[i].isFinal) {
+            const lineId = state.nextId++;
+            state.lines.push({
+              id: lineId,
+              text: text,
+              translation: "",
+              translating: false
+            });
+
+            if (state.autoTranslate) {
+              translateLine(lineId, text);
+            }
+          } else {
+            interim += (interim ? " " : "") + text;
+          }
+        }
+
+        state.interimText = interim;
+        render();
+      };
+
+      recognition.onerror = (event) => {
+        console.log("speech error:", event.error);
+
+        if (event.error === "not-allowed") {
+          state.isListening = false;
+          recordBtn.textContent = "録音開始";
+          setStatus("マイクが許可されていません。ブラウザのマイク許可を確認してください。", "#ff9999");
+          return;
+        }
+
+        if (event.error !== "no-speech" && event.error !== "aborted") {
+          setStatus("認識エラー: " + event.error, "#ff9999");
+        }
+      };
+
+      recognition.onend = () => {
+        if (state.isListening) {
+          clearTimeout(state.restartTimer);
+          state.restartTimer = setTimeout(() => {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.log("restart skipped", e);
+            }
+          }, 250);
+        } else {
+          recordBtn.textContent = "録音開始";
+          setStatus("停止中 / 単語タップで単語翻訳 / 長押しで範囲翻訳 / 字幕モード時は二段表示", "#aaaaaa");
+        }
+      };
+
+      // 操作検知（自動スクロール停止用）
+      ["scroll", "touchstart", "touchmove", "mousedown", "wheel"].forEach(evt => {
+        container.addEventListener(evt, markInteracting, { passive: true });
+      });
+
+      // 単語タップ翻訳
+      resultDiv.addEventListener("click", (e) => {
+        if (hasSelection()) return;
+
+        const el = e.target.closest(".word");
+        if (!el) return;
+
         markInteracting();
         clearActiveWord();
-        translateText(selected);
-      }
-    }, 200);
-  });
+        el.classList.add("active");
+        state.activeWordEl = el;
 
-  render();
-})();
-</script>
+        const word = el.getAttribute("data-word") || el.textContent || "";
+        translateManual(word);
+      });
 
+      // 長押し選択翻訳
+      document.addEventListener("selectionchange", () => {
+        clearTimeout(state.selectionTimer);
+        state.selectionTimer = setTimeout(() => {
+          const sel = window.getSelection();
+          const selected = sel && sel.toString ? sel.toString().trim() : "";
+          if (selected) {
+            markInteracting();
+            clearActiveWord();
+            translateManual(selected);
+          }
+        }, 200);
+      });
+
+      render();
+    })();
+  </script>
 </body>
 </html>
