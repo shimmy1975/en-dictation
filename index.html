@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>英会話ディクテくん</title>
+
+<style>
+body {
+    background-color: #000;
+    color: #FFFF00;
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: 26px; /* 元48px → 約半分 */
+    padding: 20px;
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#status {
+    font-size: 18px;
+    color: #aaa;
+    margin-bottom: 10px;
+    background: #222;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+#container {
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+}
+
+#result {
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+</style>
+</head>
+
+<body>
+
+<div id="status">タップで開始（English Dictation）</div>
+
+<div id="container">
+    <div id="result">
+ここに文字が出ます。
+    </div>
+</div>
+
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+    document.getElementById('status').innerText =
+        "このブラウザは音声認識に対応していません（Chrome / Safari推奨）";
+} else {
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US'; // ★ ここが英語化ポイント
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    const statusDiv = document.getElementById('status');
+    const resultDiv = document.getElementById('result');
+    const container = document.getElementById('container');
+
+    let isListening = false;
+    let finalText = "";
+
+    document.body.onclick = () => {
+        if (!isListening) {
+            finalText = "";
+            resultDiv.innerText = "";
+            recognition.start();
+        } else {
+            isListening = false;
+            recognition.stop();
+        }
+    };
+
+    recognition.onstart = () => {
+        isListening = true;
+        statusDiv.innerText = "● Listening...";
+        statusDiv.style.color = "#FF3B30";
+    };
+
+    recognition.onresult = (event) => {
+        let interim = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                finalText += event.results[i][0].transcript + "\n";
+            } else {
+                interim += event.results[i][0].transcript;
+            }
+        }
+
+        resultDiv.innerText = finalText + interim;
+
+        // ✅ 自動スクロール（ここがポイント）
+        container.scrollTop = container.scrollHeight;
+    };
+
+    recognition.onerror = (event) => {
+        console.log(event.error);
+    };
+
+    recognition.onend = () => {
+        if (isListening) {
+            recognition.start();
+        } else {
+            statusDiv.innerText = "停止中（タップで再開）";
+            statusDiv.style.color = "#FFFF00";
+        }
+    };
+}
+</script>
+
+</body>
+</html>
