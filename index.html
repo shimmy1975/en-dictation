@@ -15,20 +15,24 @@ body {
     padding: 20px;
     margin: 0;
     height: 100vh;
-    overflow: hidden;
 }
 
 #status {
     font-size: 18px;
-    color: #aaa;
     margin-bottom: 10px;
-    background: #222;
-    padding: 8px;
+}
+
+#startBtn {
+    background: #333;
+    color: white;
+    padding: 10px;
     border-radius: 8px;
+    margin-bottom: 10px;
+    display: inline-block;
 }
 
 #container {
-    height: calc(100vh - 130px);
+    height: calc(100vh - 160px);
     overflow-y: auto;
 }
 
@@ -37,7 +41,6 @@ body {
     line-height: 1.6;
 }
 
-/* 翻訳エリア */
 #translation {
     position: fixed;
     bottom: 0;
@@ -47,31 +50,31 @@ body {
     color: #00FFAA;
     font-size: 18px;
     padding: 12px;
-    border-top: 1px solid #333;
 }
 </style>
 </head>
 
 <body>
 
-<div id="status">タップで開始（English Dictation）</div>
+<div id="status">停止中</div>
+
+<div id="startBtn">録音開始 / 停止</div>
 
 <div id="container">
-    <div id="result">
+<div id="result">
 ここに文字が出ます。
-    </div>
+</div>
 </div>
 
 <div id="translation">
-ここに翻訳が表示されます
+ここに翻訳が出ます
 </div>
 
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (!SpeechRecognition) {
-    document.getElementById('status').innerText =
-        "このブラウザは音声認識に対応していません（Chrome / Safari推奨）";
+    document.getElementById('status').innerText = "非対応ブラウザ";
 } else {
 
     const recognition = new SpeechRecognition();
@@ -79,17 +82,16 @@ if (!SpeechRecognition) {
     recognition.interimResults = true;
     recognition.continuous = false;
 
-    const statusDiv = document.getElementById('status');
-    const resultDiv = document.getElementById('result');
-    const container = document.getElementById('container');
-
     let isListening = false;
     let finalText = "";
 
-    document.body.addEventListener("click", (e) => {
-        // 翻訳エリアタップ時は無視（誤起動防止）
-        if (e.target.id === "translation") return;
+    const statusDiv = document.getElementById("status");
+    const resultDiv = document.getElementById("result");
+    const container = document.getElementById("container");
+    const startBtn = document.getElementById("startBtn");
 
+    // ✅ 録音はボタンだけで操作
+    startBtn.onclick = () => {
         if (!isListening) {
             finalText = "";
             resultDiv.innerText = "";
@@ -98,12 +100,12 @@ if (!SpeechRecognition) {
             isListening = false;
             recognition.stop();
         }
-    });
+    };
 
     recognition.onstart = () => {
         isListening = true;
         statusDiv.innerText = "● Listening...";
-        statusDiv.style.color = "#FF3B30";
+        statusDiv.style.color = "red";
     };
 
     recognition.onresult = (event) => {
@@ -118,50 +120,44 @@ if (!SpeechRecognition) {
         }
 
         resultDiv.innerText = finalText + interim;
-
-        // 自動スクロール
         container.scrollTop = container.scrollHeight;
     };
 
-    recognition.onerror = (event) => {
-        console.log(event.error);
-    };
-
     recognition.onend = () => {
-        if (isListening) {
-            recognition.start();
-        } else {
-            statusDiv.innerText = "停止中（タップで再開）";
-            statusDiv.style.color = "#FFFF00";
+        if (isListening) recognition.start();
+        else {
+            statusDiv.innerText = "停止中";
+            statusDiv.style.color = "yellow";
         }
     };
 
-    // ✅ 選択して翻訳
-    resultDiv.addEventListener("mouseup", () => {
-        const selected = window.getSelection().toString().trim();
+    // ✅ 長押し・ドラッグ対応（ここが最重要）
+    document.addEventListener("selectionchange", () => {
+        setTimeout(() => {
+            const text = window.getSelection().toString().trim();
 
-        if (selected.length > 0) {
-            translateText(selected);
-        }
+            if (text.length > 0) {
+                translate(text);
+            }
+        }, 200); // 選択確定待ち
     });
 
-    // ✅ 翻訳関数
-    async function translateText(text) {
+    // ✅ 翻訳
+    async function translate(text) {
         try {
             const res = await fetch(
                 "https://api.mymemory.translated.net/get?q=" +
                 encodeURIComponent(text) +
                 "&langpair=en|ja"
             );
-
             const data = await res.json();
 
             document.getElementById("translation").innerText =
                 "▶ " + text + "\n→ " + data.responseData.translatedText;
 
-        } catch (err) {
+        } catch {
             document.getElementById("translation").innerText =
-                "翻訳エラー：ネットワーク確認してください";
+                "翻訳エラー";
         }
     }
 }
