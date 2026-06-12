@@ -11,7 +11,7 @@ body {
     color: #FFFF00;
     font-family: sans-serif;
     font-weight: bold;
-    font-size: 26px; /* 元48px → 約半分 */
+    font-size: 26px;
     padding: 20px;
     margin: 0;
     height: 100vh;
@@ -28,13 +28,26 @@ body {
 }
 
 #container {
-    height: calc(100vh - 60px);
+    height: calc(100vh - 130px);
     overflow-y: auto;
 }
 
 #result {
     white-space: pre-wrap;
     line-height: 1.6;
+}
+
+/* 翻訳エリア */
+#translation {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #111;
+    color: #00FFAA;
+    font-size: 18px;
+    padding: 12px;
+    border-top: 1px solid #333;
 }
 </style>
 </head>
@@ -49,6 +62,10 @@ body {
     </div>
 </div>
 
+<div id="translation">
+ここに翻訳が表示されます
+</div>
+
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -58,7 +75,7 @@ if (!SpeechRecognition) {
 } else {
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US'; // ★ ここが英語化ポイント
+    recognition.lang = 'en-US';
     recognition.interimResults = true;
     recognition.continuous = false;
 
@@ -69,7 +86,10 @@ if (!SpeechRecognition) {
     let isListening = false;
     let finalText = "";
 
-    document.body.onclick = () => {
+    document.body.addEventListener("click", (e) => {
+        // 翻訳エリアタップ時は無視（誤起動防止）
+        if (e.target.id === "translation") return;
+
         if (!isListening) {
             finalText = "";
             resultDiv.innerText = "";
@@ -78,7 +98,7 @@ if (!SpeechRecognition) {
             isListening = false;
             recognition.stop();
         }
-    };
+    });
 
     recognition.onstart = () => {
         isListening = true;
@@ -99,7 +119,7 @@ if (!SpeechRecognition) {
 
         resultDiv.innerText = finalText + interim;
 
-        // ✅ 自動スクロール（ここがポイント）
+        // 自動スクロール
         container.scrollTop = container.scrollHeight;
     };
 
@@ -115,21 +135,37 @@ if (!SpeechRecognition) {
             statusDiv.style.color = "#FFFF00";
         }
     };
+
+    // ✅ 選択して翻訳
+    resultDiv.addEventListener("mouseup", () => {
+        const selected = window.getSelection().toString().trim();
+
+        if (selected.length > 0) {
+            translateText(selected);
+        }
+    });
+
+    // ✅ 翻訳関数
+    async function translateText(text) {
+        try {
+            const res = await fetch(
+                "https://api.mymemory.translated.net/get?q=" +
+                encodeURIComponent(text) +
+                "&langpair=en|ja"
+            );
+
+            const data = await res.json();
+
+            document.getElementById("translation").innerText =
+                "▶ " + text + "\n→ " + data.responseData.translatedText;
+
+        } catch (err) {
+            document.getElementById("translation").innerText =
+                "翻訳エラー：ネットワーク確認してください";
+        }
+    }
 }
 </script>
-<div id="translation" style="
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: #111;
-    color: #00FFAA;
-    font-size: 20px;
-    padding: 10px;
-    border-top: 1px solid #333;
-">
-ここに翻訳が表示されます
-</div>
 
 </body>
 </html>
