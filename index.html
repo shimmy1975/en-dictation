@@ -244,6 +244,7 @@
       <button id="recordBtn" class="btn primary">録音開始</button>
       <button id="splitBtn" class="btn warn">区切る</button>
       <button id="subtitleBtn" class="btn on">字幕モード ON</button>
+      <button id="dictationSummaryBtn" class="btn on">要約ディクテ ON</button>
       <button id="autoTranslateBtn" class="btn on">自動翻訳 ON</button>
       <button id="summaryBtn" class="btn on">要約翻訳 ON</button>
       <button id="clearBtn" class="btn">クリア</button>
@@ -251,7 +252,7 @@
     </div>
 
     <div id="status">
-      停止中 / 重要単語を強調 / 単語タップで単語翻訳 / 長押しで範囲翻訳 / 区切るで途中字幕を強制確定
+      停止中 / 要約ディクテ ON / 重要単語を強調 / 単語タップで単語翻訳 / 長押しで範囲翻訳 / 区切るで途中字幕を強制確定
     </div>
   </div>
 
@@ -267,8 +268,8 @@
     <div id="translationHeader">手動翻訳</div>
     <div id="translationBody">ここに単語・選択範囲の翻訳が表示されます。</div>
     <div class="hint">
-      ・重要単語は少し強調表示されます<br>
-      ・要約翻訳 ON：フィラーや重複を少し整理してから訳します<br>
+      ・要約ディクテ ON：英語字幕自体を少し整理して読みやすく表示<br>
+      ・要約翻訳 ON：フィラーや重複を少し整理してから翻訳<br>
       ・字幕モード ON：英語字幕の下に小さく日本語訳を表示
     </div>
   </div>
@@ -280,6 +281,7 @@
       const recordBtn = document.getElementById("recordBtn");
       const splitBtn = document.getElementById("splitBtn");
       const subtitleBtn = document.getElementById("subtitleBtn");
+      const dictationSummaryBtn = document.getElementById("dictationSummaryBtn");
       const autoTranslateBtn = document.getElementById("autoTranslateBtn");
       const summaryBtn = document.getElementById("summaryBtn");
       const clearBtn = document.getElementById("clearBtn");
@@ -292,23 +294,6 @@
       const MAX_CHARS_PER_LINE = 500;
       const MAX_CHARS_PER_TRANSLATION_REQUEST = 500;
 
-      const state = {
-        isListening: false,
-        subtitleMode: true,
-        autoTranslate: true,
-        summaryMode: true,
-        lines: [], // { id, text, translation, translating, error }
-        interimText: "",
-        userInteracting: false,
-        interactionTimer: null,
-        selectionTimer: null,
-        restartTimer: null,
-        activeWordEl: null,
-        nextId: 1,
-        undoSnapshot: null
-      };
-
-      // 強調しない一般語
       const STOP_WORDS = new Set([
         "a","an","the","is","am","are","was","were","be","being","been",
         "i","you","he","she","it","we","they","me","him","her","us","them",
@@ -323,11 +308,31 @@
         "uh","um","well","like"
       ]);
 
+      const state = {
+        isListening: false,
+        subtitleMode: true,
+        dictationSummaryMode: true,
+        autoTranslate: true,
+        summaryMode: true,
+        lines: [], // { id, rawText, displayText, translation, translating, error }
+        interimRawText: "",
+        interimDisplayText: "",
+        userInteracting: false,
+        interactionTimer: null,
+        selectionTimer: null,
+        restartTimer: null,
+        activeWordEl: null,
+        nextId: 1,
+        undoSnapshot: null,
+        translationCache: {}
+      };
+
       if (!SpeechRecognition) {
         statusDiv.textContent = "このブラウザは音声認識に対応していません（Chrome / Edge / Safari 推奨）";
         recordBtn.disabled = true;
         splitBtn.disabled = true;
         subtitleBtn.disabled = true;
+        dictationSummaryBtn.disabled = true;
         autoTranslateBtn.disabled = true;
         summaryBtn.disabled = true;
         clearBtn.disabled = true;
@@ -343,6 +348,10 @@
       function setStatus(text, color = "#aaaaaa") {
         statusDiv.textContent = text;
         statusDiv.style.color = color;
+      }
+
+      function buildStatusText(prefix = "停止中") {
+        return `${prefix} / ${state.dictationSummaryMode ? "要約ディクテ ON" : "要約ディクテ OFF"} / 重要単語を強調 / 単語タップで単語翻訳 / 長押しで範囲翻訳`;
       }
 
       function markInteracting() {
@@ -392,7 +401,6 @@
         if (!normalized) return false;
         if (STOP_WORDS.has(normalized)) return false;
 
-        // 数字入り、先頭大文字、長めの単語を重要扱い
         const hasDigit = /\d/.test(raw);
         const startsUpper = /^[A-Z]/.test(raw);
         const isLong = normalized.length >= 6;
@@ -417,99 +425,6 @@
         }
 
         return html;
-      }
-
-      function cloneLines(lines) {
-        return lines.map(line => ({
-          id: line.id,
-          text: line.text,
-          translation: line.translation || "",
-          translating: !!line.translating,
-          error: line.error || ""
-        }));
-      }
-
-      function saveUndoSnapshot() {
-        state.undoSnapshot = {
-          lines: cloneLines(state.lines),
-          interimText: state.interimText,
-          nextId: state.nextId
-        };
-        undoBtn.disabled = false;
-      }
-
-      function restoreUndoSnapshot() {
-        if (!state.undoSnapshot) return;
-        state.lines = cloneLines(state.undoSnapshot.lines);
-        state.interimText = state.undoSnapshot.interimText;
-        state.nextId = state.undoSnapshot.nextId;
-        state.undoSnapshot = null;
-        undoBtn.disabled = true;
-        render();
-      }
-
-      function clearActiveWord() {
-        if (state.activeWordEl) {
-          state.activeWordEl.classList.remove("active");
-          state.activeWordEl = null;
-        }
-      }
-
-      function render() {
-        let html = "";
-
-        if (state.subtitleMode) {
-          if (state.lines.length === 0 && !state.interimText) {
-            html = `
-              <div class="line-block latest">
-                <div class="line-en">ここに文字が出ます。</div>
-              </div>
-            `;
-          } else {
-            state.lines.forEach((line, index) => {
-              const isLatestFinal = index === state.lines.length - 1 && !state.interimText;
-              let jaHtml = "";
-
-              if (state.autoTranslate) {
-                if (line.error) {
-                  jaHtml = `<div class="line-ja error"><span class="line-ja-label">訳</span>${escapeHtml(line.error)}</div>`;
-                } else if (line.translation) {
-                  const label = state.summaryMode ? "要約訳" : "訳";
-                  jaHtml = `<div class="line-ja"><span class="line-ja-label">${label}</span>${escapeHtml(line.translation)}</div>`;
-                } else if (line.translating) {
-                  jaHtml = `<div class="line-ja pending"><span class="line-ja-label">${state.summaryMode ? "要約訳" : "訳"}</span>翻訳中…</div>`;
-                }
-              }
-
-              html += `
-                <div class="line-block ${isLatestFinal ? "latest" : ""}">
-                  <div class="line-en">${buildWordHtml(line.text)}</div>
-                  ${jaHtml}
-                </div>
-              `;
-            });
-
-            if (state.interimText) {
-              html += `
-                <div class="line-block latest interim">
-                  <div class="line-en">${buildWordHtml(state.interimText)}</div>
-                </div>
-              `;
-            }
-          }
-        } else {
-          const mergedFinal = state.lines.map(line => line.text).join(" ");
-          const merged = (mergedFinal + (state.interimText ? (mergedFinal ? " " : "") + state.interimText : "")).trim() || "ここに文字が出ます。";
-
-          html = `
-            <div class="line-block latest ${state.interimText ? "interim" : ""}">
-              <div class="line-en">${buildWordHtml(merged)}</div>
-            </div>
-          `;
-        }
-
-        resultDiv.innerHTML = html;
-        maybeAutoScroll();
       }
 
       function splitLongText(text, maxChars = MAX_CHARS_PER_LINE) {
@@ -548,26 +463,18 @@
         return result;
       }
 
-      function cleanUpText(text) {
+      function cleanUpDictationText(text) {
         if (!text) return "";
 
         let t = text;
 
-        // 話し言葉のフィラーやつなぎを少し整理
         t = t.replace(/\b(uh|um|er|ah)\b/gi, "");
         t = t.replace(/\b(you know|i mean)\b/gi, "");
         t = t.replace(/\b(like)\b/gi, "");
-
-        // 同じ単語の連続を軽く削る
         t = t.replace(/\b(\w+)(\s+\1\b)+/gi, "$1");
-
-        // 句読点前後の空白整理
         t = t.replace(/\s+([,.!?;:])/g, "$1");
-
-        // 空白整理
         t = t.replace(/\s+/g, " ").trim();
 
-        // 文頭大文字化
         if (t.length > 0) {
           t = t.charAt(0).toUpperCase() + t.slice(1);
         }
@@ -575,19 +482,146 @@
         return t;
       }
 
-      function prepareTranslationInput(text) {
-        if (!state.summaryMode) return text;
-        return cleanUpText(text);
+      function cleanUpTranslationText(text) {
+        if (!text) return "";
+
+        let t = text;
+
+        t = t.replace(/\b(uh|um|er|ah)\b/gi, "");
+        t = t.replace(/\b(you know|i mean)\b/gi, "");
+        t = t.replace(/\b(like)\b/gi, "");
+        t = t.replace(/\b(\w+)(\s+\1\b)+/gi, "$1");
+        t = t.replace(/\s+([,.!?;:])/g, "$1");
+        t = t.replace(/\s+/g, " ").trim();
+
+        if (t.length > 0) {
+          t = t.charAt(0).toUpperCase() + t.slice(1);
+        }
+
+        return t;
       }
 
-      function appendFinalText(text) {
-        const pieces = splitLongText(text, MAX_CHARS_PER_LINE);
+      function getDisplayText(rawText) {
+        return state.dictationSummaryMode ? cleanUpDictationText(rawText) : rawText;
+      }
+
+      function prepareTranslationInput(text) {
+        return state.summaryMode ? cleanUpTranslationText(text) : text;
+      }
+
+      function cloneLines(lines) {
+        return lines.map(line => ({
+          id: line.id,
+          rawText: line.rawText,
+          displayText: line.displayText,
+          translation: line.translation || "",
+          translating: !!line.translating,
+          error: line.error || ""
+        }));
+      }
+
+      function saveUndoSnapshot() {
+        state.undoSnapshot = {
+          lines: cloneLines(state.lines),
+          interimRawText: state.interimRawText,
+          interimDisplayText: state.interimDisplayText,
+          nextId: state.nextId
+        };
+        undoBtn.disabled = false;
+      }
+
+      function restoreUndoSnapshot() {
+        if (!state.undoSnapshot) return;
+        state.lines = cloneLines(state.undoSnapshot.lines);
+        state.interimRawText = state.undoSnapshot.interimRawText;
+        state.interimDisplayText = state.undoSnapshot.interimDisplayText;
+        state.nextId = state.undoSnapshot.nextId;
+        state.undoSnapshot = null;
+        undoBtn.disabled = true;
+        render();
+      }
+
+      function clearActiveWord() {
+        if (state.activeWordEl) {
+          state.activeWordEl.classList.remove("active");
+          state.activeWordEl = null;
+        }
+      }
+
+      function render() {
+        let html = "";
+
+        if (state.subtitleMode) {
+          if (state.lines.length === 0 && !state.interimDisplayText) {
+            html = `
+              <div class="line-block latest">
+                <div class="line-en">ここに文字が出ます。</div>
+              </div>
+            `;
+          } else {
+            state.lines.forEach((line, index) => {
+              const isLatestFinal = index === state.lines.length - 1 && !state.interimDisplayText;
+              let jaHtml = "";
+
+              if (state.autoTranslate) {
+                if (line.error) {
+                  jaHtml = `<div class="line-ja error"><span class="line-ja-label">訳</span>${escapeHtml(line.error)}</div>`;
+                } else if (line.translation) {
+                  const label = state.summaryMode ? "要約訳" : "訳";
+                  jaHtml = `<div class="line-ja"><span class="line-ja-label">${label}</span>${escapeHtml(line.translation)}</div>`;
+                } else if (line.translating) {
+                  jaHtml = `<div class="line-ja pending"><span class="line-ja-label">${state.summaryMode ? "要約訳" : "訳"}</span>翻訳中…</div>`;
+                }
+              }
+
+              html += `
+                <div class="line-block ${isLatestFinal ? "latest" : ""}">
+                  <div class="line-en">${buildWordHtml(line.displayText)}</div>
+                  ${jaHtml}
+                </div>
+              `;
+            });
+
+            if (state.interimDisplayText) {
+              html += `
+                <div class="line-block latest interim">
+                  <div class="line-en">${buildWordHtml(state.interimDisplayText)}</div>
+                </div>
+              `;
+            }
+          }
+        } else {
+          const mergedFinal = state.lines.map(line => line.displayText).join(" ");
+          const merged = (mergedFinal + (state.interimDisplayText ? (mergedFinal ? " " : "") + state.interimDisplayText : "")).trim() || "ここに文字が出ます。";
+
+          html = `
+            <div class="line-block latest ${state.interimDisplayText ? "interim" : ""}">
+              <div class="line-en">${buildWordHtml(merged)}</div>
+            </div>
+          `;
+        }
+
+        resultDiv.innerHTML = html;
+        maybeAutoScroll();
+      }
+
+      function refreshAllDisplayText() {
+        state.lines.forEach(line => {
+          line.displayText = getDisplayText(line.rawText);
+        });
+        state.interimDisplayText = getDisplayText(state.interimRawText);
+      }
+
+      function appendFinalText(rawText) {
+        const pieces = splitLongText(rawText, MAX_CHARS_PER_LINE);
 
         pieces.forEach(piece => {
           const id = state.nextId++;
+          const displayText = getDisplayText(piece);
           state.lines.push({
             id,
-            text: piece,
+            rawText: piece,
+            displayText: displayText,
             translation: "",
             translating: false,
             error: ""
@@ -600,11 +634,12 @@
       }
 
       function forceSplitInterim() {
-        const text = (state.interimText || "").trim();
+        const text = (state.interimRawText || "").trim();
         if (!text) return;
 
         appendFinalText(text);
-        state.interimText = "";
+        state.interimRawText = "";
+        state.interimDisplayText = "";
         render();
       }
 
@@ -620,11 +655,22 @@
         if (data && data.responseData && data.responseData.translatedText) {
           return data.responseData.translatedText;
         }
+
+        if (data && data.responseStatus === 403) {
+          return "本日の翻訳上限に達した可能性があります。";
+        }
+
         return "翻訳結果を取得できませんでした。";
       }
 
       async function fetchTranslationSafe(text) {
         const prepared = prepareTranslationInput(text);
+        const cacheKey = `${state.summaryMode ? "summary" : "plain"}::${prepared}`;
+
+        if (state.translationCache[cacheKey]) {
+          return state.translationCache[cacheKey];
+        }
+
         const parts = splitLongText(prepared, MAX_CHARS_PER_TRANSLATION_REQUEST);
         const translatedParts = [];
 
@@ -633,7 +679,9 @@
           translatedParts.push(translated);
         }
 
-        return translatedParts.join("\n");
+        const joined = translatedParts.join("\n");
+        state.translationCache[cacheKey] = joined;
+        return joined;
       }
 
       async function translateManual(text) {
@@ -651,7 +699,7 @@
         }
       }
 
-      async function translateLine(lineId, text) {
+      async function translateLine(lineId, rawText) {
         const line = state.lines.find(l => l.id === lineId);
         if (!line) return;
         if (line.translation || line.translating) return;
@@ -661,7 +709,7 @@
         render();
 
         try {
-          const translated = await fetchTranslationSafe(text);
+          const translated = await fetchTranslationSafe(rawText);
           const target = state.lines.find(l => l.id === lineId);
           if (target) {
             target.translation = translated;
@@ -692,11 +740,10 @@
         if (!state.autoTranslate) return;
 
         for (const line of state.lines) {
-          await translateLine(line.id, line.text);
+          await translateLine(line.id, line.rawText);
         }
       }
 
-      // Buttons
       recordBtn.addEventListener("click", () => {
         if (!state.isListening) {
           try {
@@ -727,6 +774,16 @@
         render();
       });
 
+      dictationSummaryBtn.addEventListener("click", () => {
+        state.dictationSummaryMode = !state.dictationSummaryMode;
+        dictationSummaryBtn.textContent = state.dictationSummaryMode ? "要約ディクテ ON" : "要約ディクテ OFF";
+        dictationSummaryBtn.classList.toggle("on", state.dictationSummaryMode);
+
+        refreshAllDisplayText();
+        setStatus(buildStatusText(state.isListening ? "● Listening..." : "停止中"), state.isListening ? "#ff6b6b" : "#aaaaaa");
+        render();
+      });
+
       autoTranslateBtn.addEventListener("click", async () => {
         state.autoTranslate = !state.autoTranslate;
         autoTranslateBtn.textContent = state.autoTranslate ? "自動翻訳 ON" : "自動翻訳 OFF";
@@ -753,7 +810,8 @@
       clearBtn.addEventListener("click", () => {
         saveUndoSnapshot();
         state.lines = [];
-        state.interimText = "";
+        state.interimRawText = "";
+        state.interimDisplayText = "";
         clearActiveWord();
         translationBody.textContent = "ここに単語・選択範囲の翻訳が表示されます。";
         render();
@@ -763,11 +821,10 @@
         restoreUndoSnapshot();
       });
 
-      // Speech recognition
       recognition.onstart = () => {
         state.isListening = true;
         recordBtn.textContent = "録音停止";
-        setStatus("● Listening...（重要単語を強調 / 操作中は自動スクロール停止）", "#ff6b6b");
+        setStatus(buildStatusText("● Listening..."), "#ff6b6b");
       };
 
       recognition.onresult = (event) => {
@@ -791,11 +848,12 @@
           for (let i = 0; i < interimPieces.length - 1; i++) {
             appendFinalText(interimPieces[i]);
           }
-          state.interimText = interimPieces[interimPieces.length - 1];
+          state.interimRawText = interimPieces[interimPieces.length - 1];
         } else {
-          state.interimText = interim;
+          state.interimRawText = interim;
         }
 
+        state.interimDisplayText = getDisplayText(state.interimRawText);
         render();
       };
 
@@ -826,16 +884,14 @@
           }, 250);
         } else {
           recordBtn.textContent = "録音開始";
-          setStatus("停止中 / 重要単語を強調 / 単語タップで単語翻訳 / 長押しで範囲翻訳", "#aaaaaa");
+          setStatus(buildStatusText("停止中"), "#aaaaaa");
         }
       };
 
-      // Interaction lock for auto-scroll
       ["scroll", "touchstart", "touchmove", "mousedown", "wheel"].forEach(evt => {
         container.addEventListener(evt, markInteracting, { passive: true });
       });
 
-      // Tap word translation
       resultDiv.addEventListener("click", (e) => {
         if (hasSelection()) return;
 
@@ -851,7 +907,6 @@
         translateManual(word);
       });
 
-      // Selection translation
       document.addEventListener("selectionchange", () => {
         clearTimeout(state.selectionTimer);
         state.selectionTimer = setTimeout(() => {
